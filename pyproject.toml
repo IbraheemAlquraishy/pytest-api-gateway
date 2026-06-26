@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytest-api-gateway"
+version = "0.1.0"
+description = "A simple pytest plugin to let you interact with your pytest suite using http request"
+dependencies = [
+    "pytest>=9.0.3",
+    "flask>=3.1.3"
+]
+
+[project.entry-points."pytest11"]
+api_gateway = "plugin"
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
