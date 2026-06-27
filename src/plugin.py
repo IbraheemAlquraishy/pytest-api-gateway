@@ -52,5 +52,4 @@ def pytest_cmdline_main(config):
         except KeyboardInterrupt:
             print("\n Stopping API Gateway server...")
         return 0
-
-return None
+    return None
