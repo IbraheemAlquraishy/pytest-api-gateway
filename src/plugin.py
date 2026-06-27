@@ -45,15 +45,12 @@ def pytest_addoption(parser):
     parser.addoption("--serve-port",default=8000,action="store",type=int)
 
 
-def pytest_configure(config):
-    if hasattr(config, "_api_gateway_running"):
-        return
+def pytest_cmdline_main(config):
     if config.getoption("--serve"):
-        config._api_gateway_running = True
         try:
-            # Start Flask directly on the main thread
             serve(config.getoption("--serve-port"))
         except KeyboardInterrupt:
-            pass
-        finally:
-            pytest.exit("API Gateway server stopped.", returncode=0)
+            print("\n Stopping API Gateway server...")
+        return 0
+
+return None
