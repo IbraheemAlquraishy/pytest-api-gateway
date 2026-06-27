@@ -1,15 +1,20 @@
 import pytest
 from flask import Flask, jsonify, request
 import uuid
-from threading import Thread
-jobs={}
+import multiprocessing
+
+
+
+jobs = None
 app = Flask(__name__)
+
 def serve(port):
     
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 @app.route("/run", methods=["POST"])
 def run():
+    global jobs
     data=request.json
     pytest_args=data.get("args",[])
     id=str(uuid.uuid4())
@@ -17,28 +22,40 @@ def run():
         pytest_args = [pytest_args]
     job={"id":id,"status":"running"}
     jobs[id]=job
-    pytest_thread = Thread(
+    pytest_process = multiprocessing.Process(
         target=execute,
-        args=(pytest_args,id), 
-        daemon=True  # Allows Flask to shut down cleanly even if a test is running
+        args=(pytest_args, id,jobs), 
+        daemon=True  # Allows the main Flask app to shut down cleanly and kill this process
     )
-    pytest_thread.start()
-    return jsonify(job)
 
-def execute(args,id):
+    # Start the process
+    pytest_process.start()
+    return jsonify(dict(jobs[id]))
+
+def execute(args,id,shared_jobs):
     exit_code=pytest.main(args)
-    jobs[id]={"id":id,"status":"done","results":exit_code}
+    code_val = int(exit_code)
+    
+    # This will now successfully sync back to the main Flask process!
+    shared_jobs[id] = {
+        "id": id, 
+        "status": "done", 
+        "results": code_val
+    }
 
 
-@app.route("/status/<id>",methods=["GET"])
+@app.route("/status/<id>", methods=["GET"])
 def get_job(id):
-    job=jobs.get(id)
-    return jsonify(job)
+    if jobs is None:
+        return jsonify({"error": "Not initialized"}), 500
+    job = jobs.get(id)
+    return jsonify(dict(job) if job else None)
 
-@app.route("/status/all",methods=["GET"])
+@app.route("/status/all", methods=["GET"])
 def get_jobs():
-    print(jobs)
-    return jsonify(jobs)
+    if jobs is None:
+        return jsonify({})
+    return jsonify(dict(jobs))
 
 def pytest_addoption(parser):
     parser.addoption("--serve",default=False,action="store_true")
@@ -46,7 +63,11 @@ def pytest_addoption(parser):
 
 
 def pytest_cmdline_main(config):
+    global jobs
     if config.getoption("--serve"):
+
+        manager=multiprocessing.Manager()
+        jobs=manager.dict()
         try:
             serve(config.getoption("--serve-port"))
         except KeyboardInterrupt:
